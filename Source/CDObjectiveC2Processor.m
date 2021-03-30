@@ -401,14 +401,26 @@
         // See getEntsize() from http://www.opensource.apple.com/source/objc4/objc4-532.2/runtime/objc-runtime-new.h
         listHeader.entsize = [cursor readInt32] & ~(uint32_t)3;
         listHeader.count   = [cursor readInt32];
-        NSParameterAssert(listHeader.entsize == 3 * [self.machOFile ptrSize]);
+        //NSParameterAssert(listHeader.entsize == 3 * [self.machOFile ptrSize]);
+        NSUInteger offset = address + 8;
         
         for (uint32_t index = 0; index < listHeader.count; index++) {
             struct cd_objc2_method objc2Method;
-            
-            objc2Method.name  = [cursor readPtr];
-            objc2Method.types = [cursor readPtr];
-            objc2Method.imp   = [cursor readPtr];
+
+            if (listHeader.entsize & 0x80000000) {
+                objc2Method.name  = offset + [cursor readInt32];
+                objc2Method.types = offset + 4 + [cursor readInt32];
+                objc2Method.imp   = offset + 8 + (int32_t)[cursor readInt32];
+                CDMachOFileDataCursor *cursor1 = [[CDMachOFileDataCursor alloc] initWithFile:self.machOFile address:objc2Method.name];
+                objc2Method.name = [cursor1 readPtr];
+                offset += 4 * 3;
+            } else {
+                objc2Method.name  = [cursor readPtr];
+                objc2Method.types = [cursor readPtr];
+                objc2Method.imp   = [cursor readPtr];
+                offset += [self.machOFile ptrSize] * 3;
+            }
+
             NSString *name    = [self.machOFile stringAtAddress:objc2Method.name];
             NSString *types   = [self.machOFile stringAtAddress:objc2Method.types];
             
